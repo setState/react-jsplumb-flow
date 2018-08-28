@@ -1,12 +1,8 @@
 import React, { Component } from 'react'
-import $ from 'jquery'
 import 'jsplumb'
 
-import jQueryUI from './js/jquery-ui'
 import './data/data1'
 import './index.css'
-
-jQueryUI($)
 
 const jsPlumb = window.jsPlumb
 const containerId = 'diagramContainer'
@@ -121,47 +117,47 @@ export default class JSPlumbFlow extends Component {
       // 绑定连接线添加label文本
       this.bindConnectionAddLabel()
 
-      // 设置拖拉
-      $(visoSelector).draggable({
-        helper: 'clone',
-        scope: 'ss',
-      })
+      // // 设置拖拉
+      // $(visoSelector).draggable({
+      //   helper: 'clone',
+      //   scope: 'ss',
+      // })
 
-      // 放置拖拉
-      $(containerSelector).droppable({
-        scope: 'ss',
-        drop: (event, ui) => {
-          const x = parseInt(ui.offset.left - $(containerSelector).offset().left)
-          const y = parseInt(ui.offset.top - $(containerSelector).offset().top)
-          const type = ui.helper.attr('data-type')
-          const id = `${type}${new Date().valueOf()}`
-          const name = ui.helper.html()
+      // // 放置拖拉
+      // $(containerSelector).droppable({
+      //   scope: 'ss',
+      //   drop: (event, ui) => {
+      //     const x = parseInt(ui.offset.left - $(containerSelector).offset().left)
+      //     const y = parseInt(ui.offset.top - $(containerSelector).offset().top)
+      //     const type = ui.helper.attr('data-type')
+      //     const id = `${type}${new Date().valueOf()}`
+      //     const name = ui.helper.html()
 
-          // 添加节点
-          this.appendNode({ id, type, x, y, name })
-        }
-      })
+      //     // 添加节点
+      //     this.appendNode({ id, type, x, y, name })
+      //   }
+      // })
     })
   }
 
   // 添加节点
   appendNode(info) {
-    let eleStyle = `position: absolute; left: ${info.x}px; top: ${info.y}px;`
+    let styleText = `position: absolute; left: ${info.x}px; top: ${info.y}px;`
     if (info.width) {
-      eleStyle += `width: ${info.width}px; height: ${info.height}px;`
+      styleText += `width: ${info.width}px; height: ${info.height}px;`
     }
 
-    $(containerSelector).append(`
-      <div id="${info.id}"
-        class="viso-item viso-${info.type}"
-        style="${eleStyle}"
-      >
-        <span class="viso-name">${info.name}</span>
-        <span class="viso-close">&times;</span>
-      </div>
-    `)
+    const eleAppend = document.createElement('div')
+    eleAppend.setAttribute('id', info.id)
+    eleAppend.className = `viso-item viso-${info.type}`
+    eleAppend.style.cssText = styleText
+    eleAppend.innerHTML = `
+      <span class="viso-name">${info.name}</span>
+      <span class="viso-close">&times;</span>
+    `
 
-    $(`#${info.id}`).data('type', info.type)
+    document.querySelector(containerSelector).appendChild(eleAppend)
+    document.querySelector(`#${info.id}`).setAttribute('data-type', info.type)
 
     // 设置默认表现
     this.setDefault(info.id)
@@ -201,7 +197,7 @@ export default class JSPlumbFlow extends Component {
 
   // 获取端点id
   getAnchorID(anchorInfo) {
-    const nodeInfo = this.getNodeInfo('#' + anchorInfo.elementId)
+    const nodeInfo = this.getNodeInfo(document.getElementById(anchorInfo.elementId))
     const posX = (anchorInfo.x - nodeInfo.x) / nodeInfo.width
     const posY = (anchorInfo.y - nodeInfo.y) / nodeInfo.height
     let posXName = 'center'
@@ -231,16 +227,16 @@ export default class JSPlumbFlow extends Component {
     jsPlumb.deleteEveryEndpoint()
 
     // 删除所有节点
-    $(containerSelector).empty()
+    document.querySelector(containerSelector).innerHTML = ''
   }
 
   // 获取节点数据
   getNodeData() {
-    const $viso = $(containerSelector).find('.viso-item')
+    const visoEles = document.querySelectorAll(containerSelector + ' .viso-item')
     const nodeData = []
 
-    $viso.each((index, ele) => {
-      const nodeInfo = this.getNodeInfo($(ele))
+    for (let i = 0, len = visoEles.length; i < len; i++) {
+      const nodeInfo = this.getNodeInfo(visoEles[i])
 
       if (!nodeInfo.id) {
         throw new Error('流程图节点必须包含id')
@@ -259,25 +255,26 @@ export default class JSPlumbFlow extends Component {
         x: nodeInfo.x,
         y: nodeInfo.y,
       })
-    })
+    }
 
     return nodeData
   }
 
   // 获取节点相关信息
   getNodeInfo(ele) {
-    const $ele = $(ele)
-    const id = $ele.attr('id')
-    const name = $ele.find('.viso-name').text().replace(/^\s+|\s+$/g, '')
+    const id = ele.getAttribute('id')
+    const eleName = ele.querySelector('.viso-name')
+    const name = (eleName.innerText || eleName.textContent).replace(/^\s+|\s+$/g, '')
+    const currentStyle = ele.currentStyle || window.getComputedStyle(ele, null)
 
     return  {
       id: id,
       name: name,
-      type: $ele.data('type'),
-      width: $ele.width() || 80,
-      height: $ele.height() || 80,
-      x: parseInt($ele.css('left')) || 0,
-      y: parseInt($ele.css('top')) || 0,
+      type: ele.getAttribute('data-type'),
+      width: parseInt(currentStyle.width, 10) || 80,
+      height: parseInt(currentStyle.height, 10) || 80,
+      x: parseInt(currentStyle.left, 10) || 0,
+      y: parseInt(currentStyle.top, 10) || 0,
     }
   }
 
@@ -325,8 +322,7 @@ export default class JSPlumbFlow extends Component {
 
   // 获取节点坐标信息
   getAnchorPosition(elementId, anchorInfo) {
-    const $ele = $(`#${elementId}`)
-    const nodeInfo = this.getNodeInfo($ele)
+    const nodeInfo = this.getNodeInfo(document.getElementById(elementId))
 
     return {
       x: nodeInfo.x + nodeInfo.width*anchorInfo.x,
@@ -389,14 +385,14 @@ export default class JSPlumbFlow extends Component {
 
   // 绑定加载数据的操作数据
   bindLoadData() {
-    $('#loadData').on('click', () => {
+    document.querySelector('#loadData').addEventListener('click', () => {
       this.loadDataAndPaint()
     })
   }
 
   // 绑定保存数据的操作数据
   bindSaveData() {
-    $('#saveData').on('click', () => {
+    document.querySelector('#saveData').addEventListener('click', () => {
       const nodeData = this.getNodeData()
       const connectionData = this.getConnectionData()
 
@@ -412,59 +408,73 @@ export default class JSPlumbFlow extends Component {
 
   // 绑定清除内容的操作数据
   bindClearData() {
-    $('#clearData').on('click', () => {
+    document.querySelector('#clearData').addEventListener('click', () => {
       this.clearCont()
     })
   }
 
   // 绑定删除节点操作
   bindRemoveNode() {
-    $(containerSelector).on('click', '.viso-close', (event) => {
-      const $item = $(event.target).closest('.viso-item')
-      const id = $item.attr('id')
-      jsPlumb.remove(id)
+    document.querySelector(containerSelector).addEventListener('click', (event) => {
+      if (this.matchesSelector(event.target, '.viso-close')) {
+        const id = event.target.parentNode.getAttribute('id')
+        jsPlumb.remove(id)
+      }
     })
   }
 
   // 绑定节点内容编辑
   bindEditNodeName() {
-    $(containerSelector).on('dblclick', '.viso-item', (event) => {
-      const $ele = $(event.target)
-      const text = $ele.find('.viso-name').text().replace(/^\s+|\s+$/g, '')
-      const $input = $ele.find('.viso-input')
-
-      if ($input.length) {
-        $input.val(text).show()
-        this.moveEnd($input[0])
-      } else {
-        const $appendInput = $(`<input class="viso-input" value="${text}" />`).appendTo($ele)
-        this.moveEnd($appendInput[0])
+    document.querySelector(containerSelector).addEventListener('dblclick', (event) => {
+      let visoItem
+      if (this.matchesSelector(event.target, '.viso-item')) {
+        visoItem = event.target
+      } else if (this.matchesSelector(event.target.parentNode, '.viso-item')) {
+        visoItem = event.target.parentNode
       }
+      if (visoItem !== undefined) {
+        const eleName = visoItem.querySelector('.viso-name')
+        const text = (eleName.innerText || eleName.textContent).replace(/^\s+|\s+$/g, '')
+        const eleInput = visoItem.querySelector('.viso-input')
 
-      $ele.find('.viso-close').show()
+        if (eleInput) {
+          eleInput.value = text
+          eleInput.style.display = 'block'
+          this.moveEnd(eleInput)
+        } else {
+          const appendInput = document.createElement('input')
+          appendInput.className = 'viso-input'
+          appendInput.value = text
+          appendInput.addEventListener('blur', (event) => {
+            this.saveInput(event.target)
+          })
+          visoItem.appendChild(appendInput)
+          this.moveEnd(appendInput)
+        }
+
+        visoItem.querySelector('.viso-close').style.display = 'block'
+      }
     })
 
-    $(containerSelector).on('blur', '.viso-input', (event) => {
-      this.saveInput(event.target)
-    })
-
-    $(containerSelector).on('keyup', '.viso-input', (event) => {
-      if (event.keyCode === 13) {
-        this.saveInput(event.target)
+    document.querySelector(containerSelector).addEventListener('keyup', (event) => {
+      if (this.matchesSelector(event.target, '.viso-input')) {
+        if (event.keyCode === 13) {
+          this.saveInput(event.target)
+        }
       }
     })
   }
 
   // 保存数据
   saveInput(ele) {
-    const $ele = $(ele)
-    const val = $ele.val()
-
+    const val = ele.value
     if (val.trim() !== '') {
-      $ele.closest('.viso-item').find('.viso-name').text(val)
+      const eleName = ele.parentNode.querySelector('.viso-name')
+      eleName.innerHTML = ''
+      eleName.appendChild(document.createTextNode(val));
     }
-    $ele.hide()
-    $ele.closest('.viso-item').find('.viso-close').hide()
+    ele.style.display = 'none'
+    ele.parentNode.querySelector('.viso-close').style.display = 'none'
   }
 
   // 光标移至末尾
@@ -478,6 +488,23 @@ export default class JSPlumbFlow extends Component {
       sel.select();
     } else if (typeof ele.selectionStart == 'number' && typeof ele.selectionEnd == 'number') {
       ele.selectionStart = ele.selectionEnd = len;
+    }
+  }
+
+  // element.matches兼容处理
+  matchesSelector(ele, selector) {
+    if (ele.matches) {
+      return ele.matches(selector);
+    } else if (ele.matchesSelector) {
+      return ele.matchesSelector(selector);
+    } else if (ele.webkitMatchesSelector) {
+      return ele.webkitMatchesSelector(selector);
+    } else if (ele.msMatchesSelector) {
+      return ele.msMatchesSelector(selector);
+    } else if (ele.mozMatchesSelector) {
+      return ele.mozMatchesSelector(selector);
+    } else if (ele.oMatchesSelector) {
+      return ele.oMatchesSelector(selector);
     }
   }
 
