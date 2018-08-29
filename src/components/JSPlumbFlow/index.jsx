@@ -1,21 +1,23 @@
 import React, { Component } from 'react'
 import 'jsplumb'
 
-import './data/data1'
+import './data/data2'
 import './index.css'
 
 const jsPlumb = window.jsPlumb
 const containerId = 'diagramContainer'
 const containerSelector = '#' + containerId
-const visoSelector = '#operate .viso-item'
+
+// 是否允许改变流程图的布局（包括大小、连线、节点删除等）
+const canChangeLayout = false
 
 // 很多连接线都是相同设置的情况下，可以将配置抽离出来，作为一个单独的变量，作为connect的第二个参数传入。
 // 实际上connect的第二个参数会和第一个参数merge，作为一个整体。
 const commonConfig = {
   // 是否可以拖动（作为连线起点）
-  isSource: true,
+  isSource: canChangeLayout,
   // 是否可以放置（连线终点）
-  isTarget: true,
+  isTarget: canChangeLayout,
   // 设置连接点最多可以连接几条线
   // -1不限制，默认限制一条线
   maxConnections: -1,
@@ -25,7 +27,7 @@ const commonConfig = {
   // 默认值 ['Bottom', 'Bottom']
   // anchor: ['Bottom', 'Bottom'],
   // 端点类型，形状（区分大小写），Rectangle-正方形 Dot-圆形 Blank-空
-  endpoint: ['Dot', {
+  endpoint: [canChangeLayout ? 'Dot' : 'Blank', {
     radius: 4,
   }],
   // 设置端点的样式
@@ -54,16 +56,6 @@ const commonConfig = {
         width: 10,
         length: 10,
         location: 1
-    }],
-    ['Label', {
-      label: '',
-      cssClass: 'jtk-overlay-label',
-      location: 0.4,
-      events: {
-        click: function (labelOverlay, originalEvent) {
-          console.log('点击连接线的文字内容', labelOverlay, originalEvent)
-        }
-      }
     }]
   ]
 }
@@ -96,17 +88,11 @@ export default class JSPlumbFlow extends Component {
       // 绑定加载数据的操作数据
       this.bindLoadData()
 
-      // 绑定删除连接线的操作处理
-      this.bindDeleteConnection()
-
       // 绑定保存数据的操作数据
       this.bindSaveData()
 
       // 绑定清除数据的操作数据
       this.bindClearData()
-
-      // 绑定删除节点操作
-      this.bindRemoveNode()
 
       // 绑定节点内容编辑
       this.bindEditNodeName()
@@ -114,30 +100,45 @@ export default class JSPlumbFlow extends Component {
       // 加载数据并绘制流程图
       this.loadDataAndPaint()
 
-      // 绑定连接线添加label文本
-      this.bindConnectionAddLabel()
+      // 允许改变流程图的布局
+      if (canChangeLayout) {
+        // 绑定删除连接线的操作处理
+        this.bindDeleteConnection()
 
-      // // 设置拖拉
-      // $(visoSelector).draggable({
-      //   helper: 'clone',
-      //   scope: 'ss',
-      // })
+        // 绑定删除节点操作
+        this.bindRemoveNode()
 
-      // // 放置拖拉
-      // $(containerSelector).droppable({
-      //   scope: 'ss',
-      //   drop: (event, ui) => {
-      //     const x = parseInt(ui.offset.left - $(containerSelector).offset().left)
-      //     const y = parseInt(ui.offset.top - $(containerSelector).offset().top)
-      //     const type = ui.helper.attr('data-type')
-      //     const id = `${type}${new Date().valueOf()}`
-      //     const name = ui.helper.html()
+        // 绑定连接线添加label文本
+        this.bindConnectionAddLabel()
+      }
 
-      //     // 添加节点
-      //     this.appendNode({ id, type, x, y, name })
-      //   }
-      // })
+      // 绑定拖拽添加元素（暂时不需要改功能）
+      // this.bindDragAppend()
     })
+  }
+
+  // 绑定拖拽添加元素
+  bindDragAppend() {
+    // // 设置拖拉
+    // $(visoSelector).draggable({
+    //   helper: 'clone',
+    //   scope: 'ss',
+    // })
+
+    // // 放置拖拉
+    // $(containerSelector).droppable({
+    //   scope: 'ss',
+    //   drop: (event, ui) => {
+    //     const x = parseInt(ui.offset.left - $(containerSelector).offset().left)
+    //     const y = parseInt(ui.offset.top - $(containerSelector).offset().top)
+    //     const type = ui.helper.attr('data-type')
+    //     const id = `${type}${new Date().valueOf()}`
+    //     const name = ui.helper.html()
+
+    //     // 添加节点
+    //     this.appendNode({ id, type, x, y, name })
+    //   }
+    // })
   }
 
   // 添加节点
@@ -153,7 +154,7 @@ export default class JSPlumbFlow extends Component {
     eleAppend.style.cssText = styleText
     eleAppend.innerHTML = `
       <span class="viso-name">${info.name}</span>
-      <span class="viso-close">&times;</span>
+      ${canChangeLayout ? '<span class="viso-close">&times;</span>' : ''}
     `
 
     document.querySelector(containerSelector).appendChild(eleAppend)
@@ -165,7 +166,7 @@ export default class JSPlumbFlow extends Component {
 
   // 设置默认表现
   setDefault(id) {
-    this.setDraggable(id)
+    canChangeLayout && this.setDraggable(id)
     this.addEndpoint(id)
   }
 
@@ -190,7 +191,9 @@ export default class JSPlumbFlow extends Component {
     jsPlumb.connect({
       uuids: [this.getAnchorID(info.source), this.getAnchorID(info.target)],
       overlays: [
-        [ "Label", {label: "text", cssClass: 'jtk-overlay-label', location: 0.4,}]
+        [
+          "Label", this.getLabelSetInfo(info.label || '')
+        ]
       ]
     })
   }
@@ -299,9 +302,20 @@ export default class JSPlumbFlow extends Component {
       const anchorSourcePosition = this.getAnchorPosition(anchorSource.elementId, anchorSourceInfo)
       const anchorTargetPosition = this.getAnchorPosition(anchorTarget.elementId, anchorTargetInfo)
 
+      const overlays = item.getOverlays()
+      let labelText = ''
+
+      Object.keys(overlays).forEach(key => {
+        if (overlays[key].type === 'Label') {
+          labelText = overlays[key].labelText
+        }
+      })
+
       connectionData.push({
         // 连线id
         id: item.id,
+        // label文本
+        label: labelText,
         // 源节点
         source: {
           elementId: anchorSource.elementId,
@@ -327,6 +341,23 @@ export default class JSPlumbFlow extends Component {
     return {
       x: nodeInfo.x + nodeInfo.width*anchorInfo.x,
       y: nodeInfo.y + nodeInfo.height*anchorInfo.y,
+    }
+  }
+
+  // 获取设置Label文本的配置信息
+  getLabelSetInfo(labelText) {
+    return {
+      label: labelText || '',
+      cssClass: 'jtk-overlay-label',
+      location: 0.4,
+      events: {
+        click: function (labelOverlay, originalEvent) {
+          const newLabelText = window.prompt('编辑label：', labelOverlay.labelText)
+          if (newLabelText !== null) {
+            labelOverlay.setLabel(newLabelText || '')
+          }
+        }
+      }
     }
   }
 
@@ -366,21 +397,15 @@ export default class JSPlumbFlow extends Component {
   bindConnectionAddLabel() {
     // 建立连接线之前触发
     // 返回true正常建立连线，返回false取消连接
-    // jsPlumb.bind('beforeDrop', function (info, originalEvent) {
-    //   console.log('beforeDrop-', info)
-    //   console.log(info.connection.getLabel)
+    jsPlumb.bind('beforeDrop',  (info, originalEvent) => {
+      const labelText = window.prompt('请输入连接线的label') || ''
 
-    //   const output = window.prompt('请输入连接线的label')
+      if (labelText) {
+        info.connection.setLabel(this.getLabelSetInfo(labelText))
+      }
 
-    //   getOverlay
-
-    //   return false;
-    // })
-
-    // 建立端点之间的连接线时触发
-    // jsPlumb.bind('connection', function (info, originalEvent) {
-    //     console.log('connection-建立端点的连接线', info)
-    // })
+      return true;
+    })
   }
 
   // 绑定加载数据的操作数据
@@ -452,7 +477,7 @@ export default class JSPlumbFlow extends Component {
           this.moveEnd(appendInput)
         }
 
-        visoItem.querySelector('.viso-close').style.display = 'block'
+        canChangeLayout && (visoItem.querySelector('.viso-close').style.display = 'block')
       }
     })
 
@@ -474,7 +499,7 @@ export default class JSPlumbFlow extends Component {
       eleName.appendChild(document.createTextNode(val));
     }
     ele.style.display = 'none'
-    ele.parentNode.querySelector('.viso-close').style.display = 'none'
+    canChangeLayout && (ele.parentNode.querySelector('.viso-close').style.display = 'none')
   }
 
   // 光标移至末尾
@@ -513,11 +538,11 @@ export default class JSPlumbFlow extends Component {
     return (
       <div id="visobox">
         <div id="operate">
-          <div className="viso-item viso-start" data-type="start">开始</div>
+          {/* <div className="viso-item viso-start" data-type="start">开始</div>
           <div className="viso-item viso-gateway" data-type="gateway">条件</div>
           <div className="viso-item viso-task" data-type="task">任务</div>
           <div className="viso-item viso-end" data-type="end">结果</div>
-          <hr />
+          <hr /> */}
           <div className="operate-item">
             <button id="loadData">加载数据</button>
           </div>
