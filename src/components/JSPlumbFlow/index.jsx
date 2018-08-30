@@ -1,8 +1,12 @@
 import React, { Component } from 'react'
+import {Form, Select, Input, Modal} from 'antd'
 import 'jsplumb'
 
-import './data/data2'
+import './data/data3'
 import './index.css'
+import 'antd/dist/antd.css';
+
+const FormItem = Form.Item
 
 const jsPlumb = window.jsPlumb
 const containerId = 'diagramContainer'
@@ -60,13 +64,35 @@ const commonConfig = {
   ]
 }
 
+// 不同节点类型的class类名
+const TypeClassName = {
+  startEvent: 'viso-start',
+  endEvent: 'viso-end',
+  exclusiveGateway: 'viso-gateway-exclusive',
+  parallelGateway: 'viso-gateway-parallel',
+  userTask: 'viso-task',
+}
+
+// 分支条件存储
+const ConditionCache = {}
+
 export default class JSPlumbFlow extends Component {
   // 初始化页面常量、绑定事件方法
   constructor(props) {
     super(props)
 
     // 组件数据
-    this.state = {}
+    this.state = {
+      labelOverlay: null,
+      editModalSourceId: '',
+      eiditModalTargetid: '',
+      editModalCondition: '',
+      editModalLabelText: '',
+      // 流程节点
+      nodeList: null,
+      // 显示编辑浮层
+      showEditModal: false,
+    }
   }
 
   // DOM挂载完成时调用
@@ -111,57 +137,7 @@ export default class JSPlumbFlow extends Component {
         // 绑定连接线添加label文本
         this.bindConnectionAddLabel()
       }
-
-      // 绑定拖拽添加元素（暂时不需要改功能）
-      // this.bindDragAppend()
     })
-  }
-
-  // 绑定拖拽添加元素
-  bindDragAppend() {
-    // // 设置拖拉
-    // $(visoSelector).draggable({
-    //   helper: 'clone',
-    //   scope: 'ss',
-    // })
-
-    // // 放置拖拉
-    // $(containerSelector).droppable({
-    //   scope: 'ss',
-    //   drop: (event, ui) => {
-    //     const x = parseInt(ui.offset.left - $(containerSelector).offset().left)
-    //     const y = parseInt(ui.offset.top - $(containerSelector).offset().top)
-    //     const type = ui.helper.attr('data-type')
-    //     const id = `${type}${new Date().valueOf()}`
-    //     const name = ui.helper.html()
-
-    //     // 添加节点
-    //     this.appendNode({ id, type, x, y, name })
-    //   }
-    // })
-  }
-
-  // 添加节点
-  appendNode(info) {
-    let styleText = `position: absolute; left: ${info.x}px; top: ${info.y}px;`
-    if (info.width) {
-      styleText += `width: ${info.width}px; height: ${info.height}px;`
-    }
-
-    const eleAppend = document.createElement('div')
-    eleAppend.setAttribute('id', info.id)
-    eleAppend.className = `viso-item viso-${info.type}`
-    eleAppend.style.cssText = styleText
-    eleAppend.innerHTML = `
-      <span class="viso-name">${info.name}</span>
-      ${canChangeLayout ? '<span class="viso-close">&times;</span>' : ''}
-    `
-
-    document.querySelector(containerSelector).appendChild(eleAppend)
-    document.querySelector(`#${info.id}`).setAttribute('data-type', info.type)
-
-    // 设置默认表现
-    this.setDefault(info.id)
   }
 
   // 设置默认表现
@@ -192,7 +168,7 @@ export default class JSPlumbFlow extends Component {
       uuids: [this.getAnchorID(info.source), this.getAnchorID(info.target)],
       overlays: [
         [
-          "Label", this.getLabelSetInfo(info.label || '')
+          "Label", this.getLabelSetInfo(info.label || '', info.source.elementId, info.target.elementId)
         ]
       ]
     })
@@ -230,7 +206,8 @@ export default class JSPlumbFlow extends Component {
     jsPlumb.deleteEveryEndpoint()
 
     // 删除所有节点
-    document.querySelector(containerSelector).innerHTML = ''
+    // document.querySelector(containerSelector).innerHTML = ''
+    this.setState({nodeList: null})
   }
 
   // 获取节点数据
@@ -267,7 +244,9 @@ export default class JSPlumbFlow extends Component {
   getNodeInfo(ele) {
     const id = ele.getAttribute('id')
     const eleName = ele.querySelector('.viso-name')
-    const name = (eleName.innerText || eleName.textContent).replace(/^\s+|\s+$/g, '')
+    const eleSelect = ele.querySelector('.ant-select-selection-selected-value')
+    const eleRead = eleName || eleSelect
+    const name = eleRead ? (eleRead.innerText || eleRead.textContent).replace(/^\s+|\s+$/g, '') : ''
     const currentStyle = ele.currentStyle || window.getComputedStyle(ele, null)
 
     return  {
@@ -345,17 +324,26 @@ export default class JSPlumbFlow extends Component {
   }
 
   // 获取设置Label文本的配置信息
-  getLabelSetInfo(labelText) {
+  getLabelSetInfo(labelText, sourceId, targetId) {
     return {
       label: labelText || '',
       cssClass: 'jtk-overlay-label',
       location: 0.4,
       events: {
-        click: function (labelOverlay, originalEvent) {
-          const newLabelText = window.prompt('编辑label：', labelOverlay.labelText)
-          if (newLabelText !== null) {
-            labelOverlay.setLabel(newLabelText || '')
-          }
+        click: (labelOverlay, originalEvent) => {
+          console.log(sourceId, targetId)
+          this.setState({
+            labelOverlay,
+            editModalCondition: ConditionCache[`${sourceId}:${targetId}`],
+            editModalSourceId: sourceId,
+            eiditModalTargetid: targetId,
+            editModalLabelText: labelOverlay.labelText,
+            showEditModal: true,
+          })
+          // const newLabelText = window.prompt('编辑label：', labelOverlay.labelText)
+          // if (newLabelText !== null) {
+          //   labelOverlay.setLabel(newLabelText || '')
+          // }
         }
       }
     }
@@ -373,13 +361,68 @@ export default class JSPlumbFlow extends Component {
     this.clearCont()
 
     // 添加节点
-    nodeData.forEach((item) => {
-      this.appendNode(item)
+    const nodeList = nodeData.map((info) => {
+      let nodeHTML
+      let styleObj = {
+        position: 'absolute',
+        left: `${info.x}px`,
+        top: `${info.y}px`,
+      }
+      if (info.width) {
+        styleObj.width = `${info.width}px`
+        styleObj.height = `${info.height}px`
+      }
+
+      if (info.type.toLocaleLowerCase().indexOf('task') >= 0) {
+        nodeHTML = (
+          <div
+            key={info.id}
+            id={info.id}
+            className={`viso-item ${TypeClassName[info.type]}`}
+            style={styleObj}
+            data-type={info.type}
+          >
+            <Select defaultValue={info.name}>
+              <Select.Option value="组长审批">组长审批</Select.Option>
+              <Select.Option value="主管审批">主管审批</Select.Option>
+              <Select.Option value="人事审批">人事审批</Select.Option>
+              <Select.Option value="经理审批">经理审批</Select.Option>
+            </Select>
+            <span className="viso-close" style={{display: canChangeLayout ? '' : 'none'}}>&times;</span>
+          </div>
+        )
+      } else {
+        nodeHTML = (
+          <div
+            key={info.id}
+            id={info.id}
+            className={`viso-item ${TypeClassName[info.type]}`}
+            style={styleObj}
+            data-type={info.type}
+          >
+            <span className="viso-name">{info.name}</span>
+            <span className="viso-close" style={{display: canChangeLayout ? '' : 'none'}}>&times;</span>
+          </div>
+        )
+      }
+      return nodeHTML
     })
 
-    // 创建连线
-    connectionData.forEach((item) => {
-      this.setConnection(item)
+    this.setState({
+      nodeList
+    }, () => {
+      // 设置默认表现
+      nodeData.forEach((info) => {
+        this.setDefault(info.id)
+      })
+
+      // 创建连线
+      connectionData.forEach((info) => {
+        if (info.conditionExpression) {
+          ConditionCache[info.source.elementId + ':' + info.target.elementId] = info.conditionExpression
+        }
+        this.setConnection(info)
+      })
     })
   }
 
@@ -457,8 +500,10 @@ export default class JSPlumbFlow extends Component {
       } else if (this.matchesSelector(event.target.parentNode, '.viso-item')) {
         visoItem = event.target.parentNode
       }
-      if (visoItem !== undefined) {
-        const eleName = visoItem.querySelector('.viso-name')
+
+      const eleName = visoItem && visoItem.querySelector('.viso-name')
+      const type = visoItem && visoItem.getAttribute('data-type').toLocaleLowerCase()
+      if (eleName && type.indexOf('gateway') === -1) {
         const text = (eleName.innerText || eleName.textContent).replace(/^\s+|\s+$/g, '')
         const eleInput = visoItem.querySelector('.viso-input')
 
@@ -533,8 +578,28 @@ export default class JSPlumbFlow extends Component {
     }
   }
 
+  // 编辑弹窗关闭回调
+  hideEditModal = () => {
+
+  }
+
+  // 编辑弹窗：修改label文本
+  handleChangeLabelText = () => {
+
+  }
+
+  // 编辑弹窗：修改成立条件
+  handleChangeCondition = () => {
+
+  }
+
   // DOM渲染
   render() {
+    const formItemLayout = {
+      labelCol: { span: 8 },
+      wrapperCol: { span: 16 },
+    }
+
     return (
       <div id="visobox">
         <div id="operate">
@@ -553,7 +618,45 @@ export default class JSPlumbFlow extends Component {
             <button id="clearData">清除内容</button>
           </div>
         </div>
-        <div id="diagramContainer"></div>
+        <div id="diagramContainer">{this.state.nodeList}</div>
+        <Modal
+          width={300}
+          title="编辑条件"
+          visible={this.state.showEditModal}
+          onOk={this.hideEditModal}
+          onCancel={() => {
+            this.setState({showEditModal: false})
+          }}
+          okText="确认"
+          cancelText="取消"
+        >
+          <div>
+            <FormItem
+              label="配置条件："
+              colon={false}
+              required={false}
+              {...formItemLayout}
+            >
+              <Input
+                value={this.state.editModalCondition}
+                onChange={this.handleChangeCondition}
+              />
+            </FormItem>
+          </div>
+          <div>
+            <FormItem
+              label="显示文本："
+              colon={false}
+              required={false}
+              {...formItemLayout}
+            >
+              <Input
+                value={this.state.editModalLabelText}
+                onChange={this.handleChangeLabelText}
+              />
+            </FormItem>
+          </div>
+        </Modal>
       </div>
     )
   }

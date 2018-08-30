@@ -98,6 +98,39 @@ body {
   background: none;
 }
 
+#diagramContainer .ant-select {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  color: #eee;
+  text-align: center;
+  background: none;
+}
+#diagramContainer .ant-select .ant-select-selection {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: none;
+}
+#diagramContainer .ant-select .ant-select-selection__rendered {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+#diagramContainer .ant-select .ant-select-selection-selected-value {
+  float: none;
+  padding-right: 0;
+  font-size: 12px;
+}
+#diagramContainer .ant-select .ant-select-arrow {
+  display: none;
+}
+
 
 #diagramContainer .viso-close {
   position: absolute;
@@ -147,14 +180,22 @@ body {
   background-color: rgb(9, 116, 116);
 }
 
-#diagramContainer .viso-gateway {
-  width: 80px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: rgb(44, 120, 192);
+#diagramContainer .viso-gateway-exclusive {
+  width: 48px;
+  height: 48px;
+  font-size: 0;
+  line-height: 0;
+  background: url(./images/gateway_exclusive.png) no-repeat center center;
+  background-size: 100% 100%;
 }
-#diagramContainer .viso-gateway .viso-input {
-  background-color: rgb(44, 120, 192);
+
+#diagramContainer .viso-gateway-parallel {
+  width: 48px;
+  height: 48px;
+  font-size: 0;
+  line-height: 0;
+  background: url(./images/gateway_parallel.png) no-repeat center center;
+  background-size: 100% 100%;
 }
 
 #diagramContainer .diagram-item.select {
