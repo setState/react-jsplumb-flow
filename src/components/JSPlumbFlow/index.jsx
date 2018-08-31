@@ -83,6 +83,7 @@ export default class JSPlumbFlow extends Component {
 
     // 组件数据
     this.state = {
+      // 连线编辑保存信息
       labelOverlay: null,
       editModalSourceId: '',
       eiditModalTargetid: '',
@@ -290,7 +291,7 @@ export default class JSPlumbFlow extends Component {
         }
       })
 
-      connectionData.push({
+      const infoObj = {
         // 连线id
         id: item.id,
         // label文本
@@ -307,7 +308,14 @@ export default class JSPlumbFlow extends Component {
           x: anchorTargetPosition.x,
           y: anchorTargetPosition.y,
         },
-      })
+      }
+
+      const condition = ConditionCache[anchorSource.elementId + ':' + anchorTarget.elementId]
+      if (condition) {
+        infoObj['conditionExpression'] = condition
+      }
+
+      connectionData.push(infoObj)
     })
 
     return connectionData
@@ -330,8 +338,7 @@ export default class JSPlumbFlow extends Component {
       cssClass: 'jtk-overlay-label',
       location: 0.4,
       events: {
-        click: (labelOverlay, originalEvent) => {
-          console.log(sourceId, targetId)
+        click: (labelOverlay) => {
           this.setState({
             labelOverlay,
             editModalCondition: ConditionCache[`${sourceId}:${targetId}`],
@@ -340,10 +347,6 @@ export default class JSPlumbFlow extends Component {
             editModalLabelText: labelOverlay.labelText,
             showEditModal: true,
           })
-          // const newLabelText = window.prompt('编辑label：', labelOverlay.labelText)
-          // if (newLabelText !== null) {
-          //   labelOverlay.setLabel(newLabelText || '')
-          // }
         }
       }
     }
@@ -428,7 +431,7 @@ export default class JSPlumbFlow extends Component {
 
   // 绑定删除连接线的操作处理
   bindDeleteConnection() {
-    jsPlumb.bind('dblclick', function (connection, originalEvent) {
+    jsPlumb.bind('dblclick', function (connection) {
       if (window.confirm('确定删除所点击的连接线吗？')) {
         // 删除指定连接线
         jsPlumb.deleteConnection(connection)
@@ -578,19 +581,27 @@ export default class JSPlumbFlow extends Component {
     }
   }
 
-  // 编辑弹窗关闭回调
-  hideEditModal = () => {
-
+  // 编辑弹窗点击确认，保存连线label和成立条件
+  handleEditModalOnOK = () => {
+    this.state.labelOverlay.setLabel(this.state.editModalLabelText || '')
+    ConditionCache[this.state.editModalSourceId + ':' + this.state.eiditModalTargetid] = this.state.editModalCondition
+    this.setState({
+      showEditModal: false
+    })
   }
 
   // 编辑弹窗：修改label文本
-  handleChangeLabelText = () => {
-
+  handleChangeLabelText = (event) => {
+    this.setState({
+      editModalLabelText: event.target.value
+    })
   }
 
   // 编辑弹窗：修改成立条件
-  handleChangeCondition = () => {
-
+  handleChangeCondition = (event) => {
+    this.setState({
+      editModalCondition: event.target.value
+    })
   }
 
   // DOM渲染
@@ -623,7 +634,7 @@ export default class JSPlumbFlow extends Component {
           width={300}
           title="编辑条件"
           visible={this.state.showEditModal}
-          onOk={this.hideEditModal}
+          onOk={this.handleEditModalOnOK}
           onCancel={() => {
             this.setState({showEditModal: false})
           }}
